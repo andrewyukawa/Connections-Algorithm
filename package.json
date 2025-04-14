@@ -1,0 +1,19 @@
+{
+  "name": "medical-connections-algorithm",
+  "version": "1.0.0",
+  "description": "Algorithm for generating medical-themed connections puzzles",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "medical",
+    "education",
+    "connections",
+    "puzzle",
+    "algorithm"
+  ],
+  "author": "",
+  "license": "MIT"
+} 

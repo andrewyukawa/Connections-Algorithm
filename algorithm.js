@@ -698,7 +698,171 @@ function analyzeAmbiguity(items, themes, options = {}) {
     ...options
   };
   
-  // ... rest of the function ...
+  // Create a map of items to their themes
+  const itemThemeMap = new Map();
+  themes.forEach((theme, themeIndex) => {
+    const themeItems = items.slice(themeIndex * 4, themeIndex * 4 + 4);
+    themeItems.forEach(item => {
+      itemThemeMap.set(item, theme);
+    });
+  });
+  
+  // Find the difficulty and connection type for each item
+  const itemDetails = new Map();
+  items.forEach(item => {
+    const term = medicalTerms.find(t => t.term === item);
+    if (term) {
+      itemDetails.set(item, {
+        difficulty: term.difficulty,
+        connectionType: term.connectionType,
+        tags: term.tags
+      });
+    }
+  });
+  
+  // Analyze ambiguity by checking which items could fit in multiple themes
+  const ambiguousItems = [];
+  const possibleThemes = new Map();
+  
+  items.forEach(item => {
+    const details = itemDetails.get(item);
+    const primaryTheme = itemThemeMap.get(item);
+    
+    if (!details || !primaryTheme) return;
+    
+    const itemPossibleThemes = [primaryTheme];
+    
+    // Check if this item could fit in other themes
+    themes.forEach(otherTheme => {
+      if (otherTheme === primaryTheme) return;
+      
+      // Check if this item shares tags with the other theme
+      const hasSharedTags = details.tags.some(tag => 
+        tag === otherTheme || 
+        tag.includes(otherTheme)
+      );
+      
+      if (hasSharedTags) {
+        itemPossibleThemes.push(otherTheme);
+      }
+    });
+    
+    if (itemPossibleThemes.length > 1) {
+      ambiguousItems.push({
+        item,
+        possibleThemes: itemPossibleThemes,
+        connectionType: details.connectionType
+      });
+      possibleThemes.set(item, itemPossibleThemes);
+    }
+  });
+  
+  // Calculate ambiguity by difficulty level
+  const ambiguityByDifficulty = {
+    1: 0, 2: 0, 3: 0, 4: 0
+  };
+  
+  ambiguousItems.forEach(({ item }) => {
+    const details = itemDetails.get(item);
+    if (details) {
+      ambiguityByDifficulty[details.difficulty]++;
+    }
+  });
+  
+  // Calculate cross-group ambiguity
+  const crossGroupAmbiguity = {};
+  
+  // Initialize all possible pairs
+  for (let i = 1; i <= 4; i++) {
+    for (let j = i + 1; j <= 4; j++) {
+      crossGroupAmbiguity[`${i}-${j}`] = 0;
+    }
+  }
+  
+  // Count ambiguous items between each difficulty pair
+  ambiguousItems.forEach(({ item }) => {
+    const details = itemDetails.get(item);
+    const possibleThemesList = possibleThemes.get(item) || [];
+    
+    // Get difficulties of possible themes
+    const themeDifficulties = new Set();
+    possibleThemesList.forEach(themeName => {
+      const themeObj = themes.find(t => t === themeName);
+      if (themeObj) {
+        const difficulty = themes.indexOf(themeObj) + 1; // 1-indexed difficulty
+        themeDifficulties.add(difficulty);
+      }
+    });
+    
+    // Add to cross-group ambiguity count for each difficulty pair
+    Array.from(themeDifficulties).sort().forEach((diff1, index, arr) => {
+      for (let i = index + 1; i < arr.length; i++) {
+        const diff2 = arr[i];
+        const pair = `${diff1}-${diff2}`;
+        crossGroupAmbiguity[pair]++;
+      }
+    });
+  });
+  
+  // Count unique connection types
+  const connectionTypes = new Set();
+  items.forEach(item => {
+    const details = itemDetails.get(item);
+    if (details) {
+      connectionTypes.add(details.connectionType);
+    }
+  });
+  
+  // Count thematic bridges (items that bridge difficulty levels with gap > 1)
+  let thematicBridgeCount = 0;
+  ambiguousItems.forEach(({ item }) => {
+    const possibleThemesList = possibleThemes.get(item) || [];
+    
+    // Get difficulties of possible themes
+    const themeDifficulties = [];
+    possibleThemesList.forEach(themeName => {
+      const themeObj = themes.find(t => t === themeName);
+      if (themeObj) {
+        const difficulty = themes.indexOf(themeObj) + 1; // 1-indexed difficulty
+        themeDifficulties.push(difficulty);
+      }
+    });
+    
+    // Check if this item bridges difficulty levels with gap > 1
+    themeDifficulties.sort((a, b) => a - b);
+    for (let i = 0; i < themeDifficulties.length - 1; i++) {
+      if (themeDifficulties[i + 1] - themeDifficulties[i] > 1) {
+        thematicBridgeCount++;
+        break; // Count each item only once
+      }
+    }
+  });
+  
+  // Calculate difficulty distribution score
+  const difficultyDistributionScore = 
+    Math.min(4, Object.values(ambiguityByDifficulty).filter(count => count > 0).length);
+  
+  // Determine if ambiguity level is ideal
+  const ambiguousCount = ambiguousItems.length;
+  const targetRange = { min: 4, max: 8 };
+  const isIdealAmbiguity = ambiguousCount >= targetRange.min && ambiguousCount <= targetRange.max;
+  
+  // Connection type diversity score
+  const connectionTypeDiversity = connectionTypes.size;
+  const isIdealDiversity = connectionTypeDiversity >= 3; // We want at least 3 different connection types
+  
+  return {
+    ambiguousCount,
+    targetRange,
+    isIdealAmbiguity,
+    ambiguousItems,
+    connectionTypeDiversity,
+    isIdealDiversity,
+    ambiguityByDifficulty,
+    crossGroupAmbiguity,
+    difficultyDistributionScore,
+    thematicBridgeCount
+  };
 }
 
 /**
